@@ -1,0 +1,33 @@
+true_classes = TRUE classes
+true_starts = TRUE starting frame
+true_frames = TRUE ending frame
+
+Early detected/Late detected/No gestures
+
+predicted = Predicted classes
+
+levenshtein_distance = LevenshteinDistance(true_classes, predicted)	#Distance between true_classes and predicted
+levenshtein_accuracy = 1-(levenshtein_distance/len(true_classes))	
+
+levenshtein_accuracies.avg = Average Levenshtein Accuracy
+
+8 0 9 0 1 12 0 4 6 0 5 0 2 1 5 7 1 4 1 5 0 3	#22
+8 0 2 0 9 1 12 0 6 0 3 1 11 1 7 1 4 1 5 0 10	#21
+levenshtein_distance = 12
+
+===============================================================================
+
+videoidx += 1
+active_index = 0
+passive_count = 0
+active = False
+prev_active = False
+finished_prediction = None
+pre_predict = False
+
+
+cum_sum = np.zeros(opt.n_classes_clf,)		# n_classes_clf = 13
+
+===============================================================================
+
+For every 500 frames: No gesture
