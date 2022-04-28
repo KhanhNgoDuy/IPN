@@ -1,5 +1,4 @@
 import argparse
-from telnetlib import DET
 import time
 import os
 import glob 
@@ -442,7 +441,7 @@ for idx, path in enumerate(test_paths[buf:]):
                         
                         temp = 1 - (det_gap/frame_count)
 
-                        if temp < DET and temp > 0:
+                        if temp < DET_THRESHOLD and temp > 0:
                             print(f'Late detected with IoU {trueFrames}/{frame_count} at frames {start}~{end}')
                             late += 1
                         elif temp > DET_THRESHOLD:
