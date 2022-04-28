@@ -449,7 +449,7 @@ for idx, path in enumerate(test_paths[buf:]):
                             print(f'Early detected with IoU {trueFrames}/{frame_count} at frames {start}~{end}')
                             early += 1
                         elif temp == 0:
-                            print(f'NO gesture at frames {start}~{end}')
+                            print(f'No gesture at frames {start}~{end}')
                             none += 1
                                                                  
                         i = i + 1	
