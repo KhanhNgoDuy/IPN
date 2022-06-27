@@ -33,6 +33,30 @@ from matplotlib.pyplot import figure
 import scipy.io as sio
 
 
+def plot_(clf_):
+    print('Testing plot')
+    x = np.arange(len(clf_))
+    plt.plot(x, clf_)
+    plt.show()
+
+
+def plot_result(det, clf):
+    print(f'det.shape {len(det)}')
+    print(f'clf.shape {clf.shape}')
+    
+    plt.figure(1)
+    x = np.arange(len(det))
+    det = np.array(det)
+    plt.plot(x, det)
+    
+    plt.figure(2)
+    x = np.arange(clf.shape[0])
+    clf = np.array(clf)
+    plt.plot(x, clf)
+    
+    plt.show()
+    
+
 def weighting_func(x):
     return (1 / (1 + np.exp(-0.2*(x-9))))
 
@@ -161,12 +185,16 @@ spatial_transform = Compose([
 
 target_transform = ClassLabel()
 
+with open('checkpoint.txt', 'r') as f:
+    checkpoint = f.read()
+    print(f'Checkpoint: {checkpoint}')
 
 ## Get list of videos to test
 if opt.dataset == 'ipn':
     file_set = os.path.join(opt.video_path, 'Video_TestList.txt')
     test_paths = []
-    buf = 0
+    buf = int(checkpoint)
+    video_count = int(checkpoint)
     with open(file_set,'rb') as f:
         for line in f:
             vid_name = line.decode().split('\t')[0]
@@ -189,7 +217,15 @@ all_true_frames = []
 all_true_starts = []
 all_true = []
 videoidx = 0
+videopath = []
+
+early = 0
+late = 0
+none = 0
+
 for idx, path in enumerate(test_paths[buf:]):
+    video_count = video_count + 1
+    
     if opt.dataset == 'egogesture':
         opt.whole_path = path.split(os.sep, 4)[-1]
     elif opt.dataset == 'nv':
@@ -243,16 +279,18 @@ for idx, path in enumerate(test_paths[buf:]):
     
     #Begin  #Added
     DET_THRESHOLD = 0.8
-    early = 0
-    late = 0
-    none = 0
     total_frame = int(det_idx[0] + 1)
+    total_true = 0
+    total_pred = 0
     P_frame = np.random.rand(total_frame)
     T_frame = np.random.rand(total_frame)
+    det = []
+    clf = []
+    clf_ = np.zeros(total_frame)
+    best = []
     #End
 
     for i, (inputs, targets) in enumerate(test_loader):
-        
         if not opt.no_cuda:
             targets = targets.cuda(non_blocking=True)
         ground_truth_array = np.zeros(opt.n_classes_clf +1,)
@@ -289,7 +327,7 @@ for idx, path in enumerate(test_paths[buf:]):
             #### State of the detector is checked here as detector act as a switch for the classifier
             if  prediction_det == 1:
                 #print("test_data.data[i]['frame_indices'][-1]: ",test_data.data[i]['frame_indices'][-1])
-                # det_idx[i] = test_data.data[i]['frame_indices'][-1]
+                  # det_idx[i] = test_data.data[i]['frame_indices'][-1]
                 det_idx[test_data.data[i]['frame_indices'][-1]] = 1
                 pred_start.append(test_data.data[i]['frame_indices'][-1])
                 if opt.modality_clf in ['RGB', 'RGB-D', 'RGB-flo', 'RGB-seg']:
@@ -316,13 +354,19 @@ for idx, path in enumerate(test_paths[buf:]):
                 elif opt.clf_strategy == 'ewma':
                     clf_selected_queue = myqueue_clf.ewma
                     
+                det.extend([1])
+                clf.extend([outputs_clf.argmax() + 1])
+                    
             else:
+                print('No gesture at frame ', test_data.data[i]['frame_indices'][-1])
+                det.extend([0])
+                clf.extend([0])
                 outputs_clf = np.zeros(opt.n_classes_clf ,)
                 # Push the probabilities to queue
                 myqueue_clf.enqueue(outputs_clf.tolist())
                 passive_count += 1
         
-
+        
 
         if passive_count >= opt.det_counter:
             active = False
@@ -352,7 +396,7 @@ for idx, path in enumerate(test_paths[buf:]):
         if test_data.data[i]['frame_indices'][-1] % 500 == 0:
             #print('No gestures detected at frame {}'.format(test_data.data[i]['frame_indices'][-1]))
             sys.stdout.flush()
-            
+        
         if finished_prediction == True:
             best2, best1 = tuple(cum_sum.argsort()[-2:][::1])
             if cum_sum[best1]>opt.clf_threshold_final:
@@ -360,25 +404,31 @@ for idx, path in enumerate(test_paths[buf:]):
                     if best1 != prev_best1:
                         if cum_sum[best1]>opt.clf_threshold_final:  
                             results.append(((i*opt.stride_len)+opt.sample_duration_clf,best1))
+                            videopath.append('.' + path[16:])       #Add
                             #print( 'Early Detected - class : {} with prob : {} at frames {}~{}'.format(best1, cum_sum[best1], pred_start[0], test_data.data[i]['frame_indices'][-1]))
                             pred_frames.append(test_data.data[i]['frame_indices'][-1])
                             pred_starts.append(pred_start[0])
                             pred_start = []
+                            best.append(best1 + 1)
                 else:
                     if cum_sum[best1]>opt.clf_threshold_final:
                         if best1 == prev_best1:
                             if cum_sum[best1]>5:    #????????
                                 results.append(((i*opt.stride_len)+opt.sample_duration_clf,best1))
+                                videopath.append('.' + path[16:])       #Add
                                 #print( 'Late Detected - class : {} with prob : {} at frames {}~{}'.format(best1, cum_sum[best1], pred_start[0], test_data.data[i]['frame_indices'][-1]))
                                 pred_frames.append(test_data.data[i]['frame_indices'][-1])
                                 pred_starts.append(pred_start[0])
                                 pred_start = []
+                                best.append(best1 + 1)
                         else:
                             results.append(((i*opt.stride_len)+opt.sample_duration_clf,best1))
+                            videopath.append('.' + path[16:])       #Add
                             #print( 'Late Detected - class : {} with prob : {} at frames {}~{}'.format(best1, cum_sum[best1], pred_start[0], test_data.data[i]['frame_indices'][-1]))
                             pred_frames.append(test_data.data[i]['frame_indices'][-1])
                             pred_starts.append(pred_start[0])
                             pred_start = []
+                            best.append(best1 + 1)
                 
                 finished_prediction = False
                 prev_best1 = best1
@@ -395,8 +445,9 @@ for idx, path in enumerate(test_paths[buf:]):
     
     #Begin    #Added
     
-    for start, end in zip(pred_starts, pred_frames):
+    for start, end, class_ in zip(pred_starts, pred_frames, best):
         P_frame[start - 1 : end] = [1 for _ in range(start - 1, end)]
+        clf_[start - 1 : end] = class_
 
     if opt.dataset == 'egogesture':
         target_csv_path = os.path.join(opt.video_path.rsplit(os.sep, 1)[0], 
@@ -413,7 +464,7 @@ for idx, path in enumerate(test_paths[buf:]):
         true_classes = []
         true_frames = []
         true_starts = []
-        i = 0
+        detector_accuracy = 0
         
         with open('host/annotation_ipnGesture/vallistall.txt') as csvfile:
             readCSV = csv.reader(csvfile, delimiter=' ')
@@ -424,13 +475,13 @@ for idx, path in enumerate(test_paths[buf:]):
                         true_starts.append(int(row[2]))
                         true_frames.append(int(row[3]))
                         
-	#Beginning #Added
+	          #Beginning #Added
                         start = true_starts[-1]
                         end = true_frames[-1]
                         frame_count = end - start + 1 
                         T_frame[start-1 : end] = 1          
 
-                        trueFrames = np.sum(T_frame == P_frame)
+                        correct_detected = np.sum(T_frame == P_frame)
                         
                         det_gap = 0
                         for x in P_frame[start-1 : end]:
@@ -440,28 +491,28 @@ for idx, path in enumerate(test_paths[buf:]):
                                 break
                         
                         temp = 1 - (det_gap/frame_count)
-
                         if temp < DET_THRESHOLD and temp > 0:
-                            print(f'Late detected with IoU {trueFrames}/{frame_count} at frames {start}~{end}')
+                            #print(f'Late detected with IoU {correct_detected}/{frame_count} at frames {start}~{end}')
                             late += 1
                         elif temp > DET_THRESHOLD:
-                            print(f'Early detected with IoU {trueFrames}/{frame_count} at frames {start}~{end}')
+                            #print(f'Early detected with IoU {correct_detected}/{frame_count} at frames {start}~{end}')
                             early += 1
                         elif temp == 0:
-                            print(f'No gesture at frames {start}~{end}')
+                            #print(f'No gesture at frames {start}~{end}')
                             none += 1
-                                                                 
-                        i = i + 1	
-                        detector_accuracy = trueFrames/frame_count
+                                                      
+                        total_pred += correct_detected
+                        total_true += frame_count
                         
                         T_frame = np.random.rand(total_frame)
 
-    detector_accuracy = detector_accuracy / i
+    detector_accuracy = total_pred/total_true
     detector_accuracies.update(detector_accuracy)
     print(f'Detector accuracy = {detector_accuracies.val} ({detector_accuracies.avg})')
-    print(f'{early: }\t{late: }\t{none: }')
+    print(f'{total_pred}/{total_true}')
+    print(f'Early detected: {early: }\nLate detected: {late: }\nNone: {none: }')
 	#Ending
-                        
+         
                           
     true_classes = np.array(true_classes)
     if results == []:
@@ -511,6 +562,26 @@ for idx, path in enumerate(test_paths[buf:]):
     end_frames.append(end_fra)
     pre_classes.append(pre_cla)
     sys.stdout.flush()
+    #plot_result(det, clf_)
+    
+    #Begin
+    with open('val_pred_clf.txt', 'a') as f:
+        for i in range(len(videopath)):
+            print(f'Length of video path: {len(videopath)}')
+            f.write(f'{videopath[i]} {best[i]} {pred_starts[i]} {pred_frames[i]}\n')
+            
+    with open('val_pred_det.txt', 'a') as f:
+        f.write(videopath[0] + '\n')
+        f.write(' '.join(str(item) for item in clf))
+        f.write('\n')
+        print('End of val_pred_det.txt')
+    
+    with open('checkpoint.txt', 'w') as f:
+        f.write(str(video_count))
+    
+    videopath = []
+    best = []
+    #End
     
 print('Average Levenshtein Accuracy= {}'.format(levenshtein_accuracies.avg))
 
